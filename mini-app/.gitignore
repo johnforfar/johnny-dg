@@ -14,8 +14,9 @@
 **/*.svg
 
 # Allow only encrypted files in data/
-!/data/**/*.age
 /data/**
+!/data/
+!/data/**/*.age
 
 # Node/Next artifacts
 .next
