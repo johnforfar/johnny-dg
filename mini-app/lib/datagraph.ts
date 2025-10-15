@@ -113,7 +113,7 @@ export async function getPost(baseDir: string, slug: string) {
 export async function getDecryptedImage(baseDir: string, filename: string): Promise<{ data: Buffer; contentType: string } | null> {
   let encPath = path.join(baseDir, `data/images/${filename}.age`);
   if (!(await fse.pathExists(encPath))) {
-    const hashed = sha256Hex(filename);
+    const hashed = hmacHex(path.basename(filename));
     encPath = path.join(baseDir, `data/images/${hashed}.age`);
     if (!(await fse.pathExists(encPath))) return null;
   }
