@@ -15,7 +15,7 @@
 
 # Allow only encrypted files in data/
 /data/**
-!/data/
+!/data/**/
 !/data/**/*.age
 
 # Node/Next artifacts
