@@ -3,10 +3,11 @@ import path from 'path';
 import { getDecryptedImage } from '@/lib/datagraph';
 
 export const dynamic = 'force-dynamic';
-export async function GET(_: Request, { params }: { params: { filename: string } }) {
+export async function GET(_: Request, ctx: { params: Promise<{ filename: string }> }) {
   try {
     const baseDir = path.join(process.cwd());
-    const img = await getDecryptedImage(baseDir, params.filename);
+    const { filename } = await ctx.params;
+    const img = await getDecryptedImage(baseDir, filename);
     if (!img) return NextResponse.json({ error: 'Not found' }, { status: 404 });
     return new NextResponse(img.data, {
       headers: {
