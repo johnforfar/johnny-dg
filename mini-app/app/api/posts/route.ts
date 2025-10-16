@@ -8,7 +8,7 @@ export async function GET() {
     const baseDir = path.join(process.cwd());
     const posts = await getPostsList(baseDir);
     return NextResponse.json(posts);
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json({ error: 'Failed to load posts' }, { status: 500 });
   }
 }

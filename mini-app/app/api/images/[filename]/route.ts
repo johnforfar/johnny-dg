@@ -15,7 +15,7 @@ export async function GET(_: Request, ctx: { params: Promise<{ filename: string 
         'Cache-Control': 'public, max-age=31536000'
       }
     });
-  } catch (e: any) {
+  } catch (e: unknown) {
     return NextResponse.json({ error: 'Failed to load image' }, { status: 500 });
   }
 }

@@ -11,8 +11,8 @@ interface TipProps {
   authorFid?: number;
 }
 
-export function Tip({ postTitle, postSlug, authorFid }: TipProps) {
-  const { sdk, isInMiniApp, context } = useMiniAppContext();
+export function Tip({ postTitle, postSlug }: TipProps) {
+  const { sdk, isInMiniApp } = useMiniAppContext();
   const [isTipping, setIsTipping] = useState(false);
   const [tipAmount, setTipAmount] = useState<number | null>(null);
 

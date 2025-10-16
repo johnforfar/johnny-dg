@@ -10,7 +10,17 @@ function hmacHex(input: string): string {
   return crypto.createHmac('sha256', key).update(input).digest('hex');
 }
 
-export type Frontmatter = Record<string, any>;
+export type Frontmatter = Record<string, unknown>;
+
+export type PostMetadata = {
+  slug: string;
+  title?: string;
+  date?: string;
+  tags?: string[];
+  categories?: string[];
+  coverImage?: string | null;
+  summary?: string;
+};
 
 export function decryptFileToBuffer(encryptedPath: string): Buffer {
   const privateKey = process.env.AGE_PRIVATE_KEY;
@@ -43,9 +53,9 @@ export function extractFrontmatter(content: string): Frontmatter {
 
 export async function getPostsList(baseDir: string) {
   const metadataPath = path.join(baseDir, 'metadata/posts.json');
-  if (!(await fse.pathExists(metadataPath))) return [] as any[];
+  if (!(await fse.pathExists(metadataPath))) return [] as unknown[];
   const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
-  const posts = await Promise.all((metadata.posts || []).map(async (post: any) => {
+  const posts = await Promise.all((metadata.posts || []).map(async (post: PostMetadata) => {
     let coverImage = post.coverImage;
     let tags = post.tags || [];
     let date = post.date;
@@ -58,9 +68,9 @@ export async function getPostsList(baseDir: string) {
       if (await fse.pathExists(encPath)) {
         const decrypted = decryptFileToBuffer(encPath).toString('utf8');
         const fm = extractFrontmatter(decrypted);
-        coverImage = fm.coverImage || coverImage;
+        coverImage = (typeof fm.coverImage === 'string' ? fm.coverImage : null) || coverImage;
         tags = Array.isArray(fm.tags) ? fm.tags : tags;
-        date = fm.date || date;
+        date = (typeof fm.date === 'string' ? fm.date : '') || date;
       }
     } catch {}
     // strip date prefixes e.g. "2020 04 13 Title"
