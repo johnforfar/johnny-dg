@@ -29,6 +29,14 @@ pkgs.buildNpmPackage {
       mkdir -p $out/share/homepage/public
     fi
 
+    # Copy metadata and data directories for the blog
+    if [ -d metadata ]; then
+      cp -r metadata $out/share/homepage/metadata
+    fi
+    if [ -d data ]; then
+      cp -r data $out/share/homepage/data
+    fi
+
     mkdir -p $out/share/homepage/.next
     cp -r .next/static $out/share/homepage/.next/static
 
