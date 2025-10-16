@@ -1,7 +1,7 @@
 {
   inputs = {
     xnode-manager.url = "github:Openmesh-Network/xnode-manager";
-    johnny-dg.url = "github:johnforfar/johnny-dg"; # "path:..";
+    johnny-dg.url = "github:johnforfar/johnny-dg?ref=main"; # "path:..";
     nixpkgs.follows = "johnny-dg/nixpkgs";
   };
 
