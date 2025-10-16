@@ -23,7 +23,11 @@ pkgs.buildNpmPackage {
 
     cp -r .next/standalone $out/share/homepage/
     # cp -r .env $out/share/homepage/
-    cp -r public $out/share/homepage/public
+    if [ -d public ]; then
+      cp -r public $out/share/homepage/public
+    else
+      mkdir -p $out/share/homepage/public
+    fi
 
     mkdir -p $out/share/homepage/.next
     cp -r .next/static $out/share/homepage/.next/static
