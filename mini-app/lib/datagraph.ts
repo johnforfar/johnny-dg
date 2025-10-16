@@ -25,9 +25,22 @@ export type PostMetadata = {
 export function decryptFileToBuffer(encryptedPath: string): Buffer {
   const privateKey = process.env.AGE_PRIVATE_KEY;
   if (!privateKey) throw new Error('AGE_PRIVATE_KEY not configured');
-  const cmd = `age -d -i <(echo "${privateKey}") "${encryptedPath}"`;
-  const buf = execSync(cmd, { shell: '/bin/bash', encoding: 'buffer' }) as unknown as Buffer;
-  return Buffer.from(buf);
+  
+  console.log('Decrypting file:', encryptedPath);
+  console.log('AGE_PRIVATE_KEY available:', !!privateKey);
+  
+  try {
+    const cmd = `age -d -i <(echo "${privateKey}") "${encryptedPath}"`;
+    console.log('Running command:', cmd.replace(privateKey, '[REDACTED]'));
+    const buf = execSync(cmd, { shell: '/bin/bash', encoding: 'buffer' }) as unknown as Buffer;
+    console.log('Decryption successful, buffer size:', buf.length);
+    return Buffer.from(buf);
+  } catch (error) {
+    console.error('Decryption failed:', error);
+    console.error('File path:', encryptedPath);
+    console.error('AGE_PRIVATE_KEY length:', privateKey.length);
+    throw error;
+  }
 }
 
 export function extractFrontmatter(content: string): Frontmatter {
