@@ -9,55 +9,35 @@ pkgs.buildNpmPackage {
   };
   npmConfigHook = pkgs.importNpmLock.npmConfigHook;
 
-  # Ensure all dependencies are available
-  buildInputs = with pkgs; [
-    nodejs_20
-    npm
-  ];
-
-  # Build configuration
-  npmBuild = "npm run build";
-  
   postBuild = ''
-    # Ensure standalone output is properly configured
-    if [ ! -f .next/standalone/server.js ]; then
-      echo "Standalone build not found, creating fallback"
-      mkdir -p .next/standalone
-      cp -r .next/server.js .next/standalone/server.js || true
-    fi
-    
-    # Add shebang and make executable
+    # Add a shebang to the server js file, then patch the shebang to use a
+    # nixpkgs nodes binary
     sed -i '1s|^|#!/usr/bin/env node\n|' .next/standalone/server.js
     patchShebangs .next/standalone/server.js
-    chmod +x .next/standalone/server.js
   '';
 
   installPhase = ''
     runHook preInstall
+
     mkdir -p $out/{share,bin}
-    
-    # Copy standalone build
-    cp -r .next/standalone $out/share/johnny-dg/
-    
-    # Copy public assets
-    cp -r public $out/share/johnny-dg/public || true
-    
-    # Copy static assets
-    mkdir -p $out/share/johnny-dg/.next
-    cp -r .next/static $out/share/johnny-dg/.next/static || true
-    
-    # Create cache directory symlink
-    ln -s /var/cache/johnny-dg $out/share/johnny-dg/.next/cache
-    
-    # Make server executable
-    chmod +x $out/share/johnny-dg/server.js
-    
-    # Create wrapper script
-    makeWrapper $out/share/johnny-dg/server.js $out/bin/johnny-dg \
+
+    cp -r .next/standalone $out/share/homepage/
+    # cp -r .env $out/share/homepage/
+    cp -r public $out/share/homepage/public
+
+    mkdir -p $out/share/homepage/.next
+    cp -r .next/static $out/share/homepage/.next/static
+
+    # https://github.com/vercel/next.js/discussions/58864
+    ln -s /var/cache/mini-app $out/share/homepage/.next/cache
+
+    chmod +x $out/share/homepage/server.js
+
+    # we set a default port to support "nix run ..."
+    makeWrapper $out/share/homepage/server.js $out/bin/johnny-dg \
       --set-default PORT 3006 \
-      --set-default HOSTNAME 0.0.0.0 \
-      --set-default NODE_ENV production
-    
+      --set-default HOSTNAME 0.0.0.0
+
     runHook postInstall
   '';
 
@@ -65,7 +45,5 @@ pkgs.buildNpmPackage {
 
   meta = {
     mainProgram = "johnny-dg";
-    description = "Johnny DG unified mini-app with AI editing";
-    license = lib.licenses.mit;
   };
 }
