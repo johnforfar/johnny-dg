@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,36 @@ export default function PostPage() {
   const [post, setPost] = useState<PostData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<string>("");
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const isLocalhost = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return ['localhost','127.0.0.1'].includes(window.location.hostname);
+  }, []);
+
+  async function saveDraftOnce() {
+    if (!isLocalhost || !post) return;
+    try {
+      setSaving(true);
+      setSaveMsg('Saving...');
+      const currentDomain = window.location.hostname;
+      const res = await fetch(`/api/posts/${slug}?domain=${encodeURIComponent(currentDomain)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: draft, metadata: post?.metadata || {} })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      setSaveMsg('Autosaved');
+    } catch (e) {
+      setSaveMsg('Autosave failed');
+    } finally {
+      setSaving(false);
+    }
+  }
 
   useEffect(() => {
     const fetchPost = async () => {
@@ -55,6 +85,7 @@ export default function PostPage() {
         
         const data = await response.json();
         setPost(data);
+        setDraft(data.content || "");
       } catch (err) {
         console.error('Fetch error:', err);
         setError(err instanceof Error ? err.message : 'Failed to fetch post');
@@ -70,6 +101,19 @@ export default function PostPage() {
       setLoading(false);
     }
   }, [slug]);
+
+  // Autosave with debounce when editing and draft changes
+  useEffect(() => {
+    if (!isEditing) return;
+    if (!isLocalhost) return;
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void saveDraftOnce();
+    }, 800);
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [draft, isEditing, isLocalhost]);
 
   // Load Twitter widgets script
   useEffect(() => {
@@ -119,7 +163,18 @@ export default function PostPage() {
           <Link href="/">← Back to Posts</Link>
         </Button>
         
-        <h1 className="text-4xl font-bold mb-4">{post.metadata.title}</h1>
+        <div className="flex items-center justify-between gap-4 mb-4">
+          <h1 className="text-4xl font-bold">{post.metadata.title}</h1>
+          {/* Local-only Edit button for specific post */}
+          {isLocalhost && slug === 'deploy-ai-to-bare-metal-save-money' && (
+            <Button
+              variant={isEditing ? "secondary" : "default"}
+              onClick={() => setIsEditing((v) => !v)}
+            >
+              {isEditing ? 'Close Editor' : 'Edit Post'}
+            </Button>
+          )}
+        </div>
         
         <p className="text-muted-foreground mb-4">{post.metadata.date}</p>
         
@@ -168,6 +223,7 @@ export default function PostPage() {
         />
       </div>
       
+      {!isEditing && (
       <article className="prose prose-lg max-w-none">
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
@@ -383,6 +439,75 @@ export default function PostPage() {
           {post.content}
         </ReactMarkdown>
       </article>
+      )}
+
+      {isEditing && (
+        <section className="mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xl font-semibold">Inline Editor (local only)</h2>
+            <div className="text-sm text-muted-foreground">{saveMsg}</div>
+          </div>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="w-full h-80 p-3 border rounded-md font-mono text-sm"
+          />
+          <div className="flex gap-2 mt-3">
+            {isLocalhost && (
+              <Button
+                variant="secondary"
+                disabled={saving}
+                onClick={async () => {
+                  try {
+                    setSaving(true);
+                    setSaveMsg('Generating...');
+                    const res = await fetch('/api/ai/edit', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ title: post?.metadata?.title || '', content: draft })
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    const data = await res.json();
+                    if (typeof data.suggestion === 'string' && data.suggestion.trim().length > 0) {
+                      setDraft(data.suggestion);
+                      setSaveMsg('AI suggestion applied');
+                    } else {
+                      setSaveMsg('AI returned no suggestion');
+                    }
+                  } catch (e) {
+                    setSaveMsg('AI generation failed');
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+              >
+                AI Improve
+              </Button>
+            )}
+            <Button
+              disabled={saving}
+              onClick={async () => {
+                await saveDraftOnce();
+                // Reflect changes immediately in view without refresh
+                setPost((prev) => prev ? { ...prev, content: draft } as PostData : prev);
+                setIsEditing(false);
+              }}
+            >
+              {saving ? 'Saving...' : 'Save & Close'}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                // Exit editor and reflect latest draft in rendered view
+                setPost((prev) => prev ? { ...prev, content: draft } as PostData : prev);
+                setIsEditing(false);
+              }}
+            >
+              Close
+            </Button>
+          </div>
+        </section>
+      )}
       
       <div className="mt-12 pt-8 border-t">
         <div className="flex gap-4">
