@@ -22,6 +22,48 @@ export type PostMetadata = {
   summary?: string;
 };
 
+export type PostSummary = {
+  slug: string;
+  title: string;
+  date: string;
+  tags: string[];
+  categories: string[];
+  coverImage: string | null;
+  thumbnailExists: boolean;
+};
+
+const POSTS_CACHE_TTL_MS = Number.parseInt(process.env.POSTS_CACHE_TTL_MS || '', 10) || 60_000;
+
+type PostsCache = {
+  timestamp: number;
+  data: PostSummary[];
+};
+
+let postsCache: PostsCache | null = null;
+
+function slugify(input: string): string {
+  const normalized = input
+    .normalize('NFKD')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (normalized) return normalized;
+  return crypto.randomBytes(16).toString('hex');
+}
+
+function cleanTitle(input: string): string {
+  const dateMatch = input.match(/^\d{4}\s+\d{1,2}\s+\d{1,2}\s+(.+)$/);
+  return dateMatch ? dateMatch[1] : input;
+}
+
+function toStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((v) => (typeof v === 'string' ? v : null))
+    .filter((v): v is string => typeof v === 'string' && v.length > 0);
+}
+
 export function decryptFileToBuffer(encryptedPath: string): Buffer {
   const privateKey = process.env.AGE_PRIVATE_KEY;
   if (!privateKey) throw new Error('AGE_PRIVATE_KEY not configured');
@@ -64,43 +106,72 @@ export function extractFrontmatter(content: string): Frontmatter {
   return fm;
 }
 
-export async function getPostsList(baseDir: string) {
-  const metadataPath = path.join(baseDir, 'metadata/posts.json');
-  if (!(await fse.pathExists(metadataPath))) return [] as unknown[];
-  const metadata = JSON.parse(await fs.readFile(metadataPath, 'utf8'));
-  const posts = await Promise.all((metadata.posts || []).map(async (post: PostMetadata) => {
-    let coverImage = post.coverImage;
-    let tags = post.tags || [];
-    let date = post.date;
+export async function getPostsList(baseDir: string, options?: { forceRefresh?: boolean }) {
+  if (!options?.forceRefresh && postsCache && Date.now() - postsCache.timestamp < POSTS_CACHE_TTL_MS) {
+    return postsCache.data;
+  }
+
+  const postsDir = path.join(baseDir, 'data/posts');
+  if (!(await fse.pathExists(postsDir))) {
+    postsCache = { timestamp: Date.now(), data: [] };
+    return postsCache.data;
+  }
+
+  const files = await fs.readdir(postsDir);
+  const ageFiles = files.filter((f) => f.endsWith('.mdx.age'));
+
+  const posts: PostSummary[] = [];
+  for (const filename of ageFiles) {
+    const encPath = path.join(postsDir, filename);
+
     try {
-      let encPath = path.join(baseDir, `data/posts/${post.slug}.mdx.age`);
-      if (!(await fse.pathExists(encPath))) {
-        const hashed = hmacHex(post.slug);
-        encPath = path.join(baseDir, `data/posts/${hashed}.mdx.age`);
+      const decrypted = decryptFileToBuffer(encPath).toString('utf8');
+      const fm = extractFrontmatter(decrypted);
+
+      const rawTitle = typeof fm.title === 'string' && fm.title.trim().length > 0 ? fm.title.trim() : 'Untitled';
+      let slug = filename.replace(/\.mdx\.age$/, '');
+      const isHashed = /^[a-f0-9]{64}$/.test(slug);
+
+      if (isHashed) {
+        if (typeof fm.slug === 'string' && fm.slug.trim().length > 0) {
+          slug = fm.slug.trim();
+        } else {
+          slug = slugify(rawTitle);
+        }
       }
-      if (await fse.pathExists(encPath)) {
-        const decrypted = decryptFileToBuffer(encPath).toString('utf8');
-        const fm = extractFrontmatter(decrypted);
-        coverImage = (typeof fm.coverImage === 'string' ? fm.coverImage : null) || coverImage;
-        tags = Array.isArray(fm.tags) ? fm.tags : tags;
-        date = (typeof fm.date === 'string' ? fm.date : '') || date;
-      }
-    } catch {}
-    // strip date prefixes e.g. "2020 04 13 Title"
-    let cleanTitle = post.title as string;
-    const dateMatch = cleanTitle.match(/^\d{4}\s+\d{1,2}\s+\d{1,2}\s+(.+)$/);
-    if (dateMatch) cleanTitle = dateMatch[1];
-    return {
-      slug: post.slug,
-      title: cleanTitle,
-      date,
-      tags: Array.isArray(tags) ? tags : [],
-      categories: Array.isArray(tags) ? tags : [],
-      coverImage,
-      thumbnailExists: !!coverImage,
-    };
-  }));
-  return posts;
+
+      const date = typeof fm.date === 'string' ? fm.date : '';
+      const coverImage = typeof fm.coverImage === 'string' ? fm.coverImage : null;
+      const tags = toStringArray(fm.tags);
+      const categories = toStringArray(fm.categories);
+
+      posts.push({
+        slug,
+        title: cleanTitle(rawTitle),
+        date,
+        tags,
+        categories: categories.length > 0 ? categories : tags,
+        coverImage,
+        thumbnailExists: !!coverImage,
+      });
+    } catch (error) {
+      console.error(`Failed to process ${filename}:`, error);
+    }
+  }
+
+  posts.sort((a, b) => {
+    const dateA = a.date ? Date.parse(a.date) : 0;
+    const dateB = b.date ? Date.parse(b.date) : 0;
+    if (dateA === dateB) return a.title.localeCompare(b.title);
+    return dateB - dateA;
+  });
+
+  postsCache = {
+    timestamp: Date.now(),
+    data: posts,
+  };
+
+  return postsCache.data;
 }
 
 export async function getPost(baseDir: string, slug: string) {

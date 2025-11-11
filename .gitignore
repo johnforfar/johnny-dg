@@ -72,3 +72,7 @@ jspm_packages/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# x402 folders
+x402-base-demo/
+x402-solana-demo/
