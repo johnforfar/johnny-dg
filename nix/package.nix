@@ -1,13 +1,38 @@
 { pkgs, lib }:
+let
+  sourceFilter = name: type:
+    let
+      baseName = baseNameOf (toString name);
+    in
+    !(
+      baseName == "node_modules" ||
+      baseName == ".next" ||
+      baseName == ".git" ||
+      baseName == ".DS_Store" ||
+      baseName == ".env"
+    );
+
+  src = lib.cleanSourceWith {
+    src = ../mini-app;
+    filter = sourceFilter;
+  };
+in
 pkgs.buildNpmPackage {
   pname = "johnny-dg";
   version = "1.0.0";
-  src = ../mini-app;
+  src = src;
 
   npmDeps = pkgs.importNpmLock {
     npmRoot = ../mini-app;
   };
   npmConfigHook = pkgs.importNpmLock.npmConfigHook;
+
+  # Disable turbopack for reliable standalone build
+  # And patch 'age' command to use absolute path to avoid PATH issues in container
+  postPatch = ''
+    substituteInPlace package.json --replace-fail "next build --turbopack" "next build"
+    substituteInPlace lib/datagraph.ts --replace-fail "const cmd = \`age " "const cmd = \`${lib.getExe pkgs.age} "
+  '';
 
   postBuild = ''
     # Add a shebang to the server js file, then patch the shebang to use a
@@ -48,7 +73,8 @@ pkgs.buildNpmPackage {
     # we set a default port to support "nix run ..."
     makeWrapper $out/share/homepage/server.js $out/bin/johnny-dg \
       --set-default PORT 3006 \
-      --set-default HOSTNAME 0.0.0.0
+      --set-default HOSTNAME 0.0.0.0 \
+      --prefix PATH : ${lib.makeBinPath [ pkgs.age ]}
 
     runHook postInstall
   '';

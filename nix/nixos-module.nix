@@ -107,6 +107,7 @@ in
         NEXT_PUBLIC_ACCOUNT_ASSOCIATION = builtins.toJSON cfg.accountAssociation;
         NEXT_PUBLIC_BASE_BUILDER = builtins.toJSON cfg.baseBuilder;
       };
+      path = [ pkgs.age ];
       serviceConfig = {
         ExecStart = "${lib.getExe johnny-dg}";
         User = "xnode-miniapp-template";
