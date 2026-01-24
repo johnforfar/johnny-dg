@@ -1,5 +1,6 @@
 import { execSync } from 'child_process';
 import fs from 'fs/promises';
+import { writeFileSync, unlinkSync } from 'fs';
 import fse from 'fs-extra';
 import path from 'path';
 import crypto from 'crypto';
@@ -71,10 +72,16 @@ export function decryptFileToBuffer(encryptedPath: string): Buffer {
   console.log('Decrypting file:', encryptedPath);
   console.log('AGE_PRIVATE_KEY available:', !!privateKey);
   
+  // Write key to temp file to avoid shell process substitution issues
+  const tempKeyPath = path.join('/tmp', `age-key-${crypto.randomBytes(4).toString('hex')}`);
+  
   try {
-    const cmd = `age -d -i <(echo "${privateKey}") "${encryptedPath}"`;
-    console.log('Running command:', cmd.replace(privateKey, '[REDACTED]'));
-    const buf = execSync(cmd, { shell: '/bin/bash', encoding: 'buffer' }) as unknown as Buffer;
+    writeFileSync(tempKeyPath, privateKey, { mode: 0o600 });
+
+    const cmd = `age -d -i "${tempKeyPath}" "${encryptedPath}"`;
+    console.log('Running command:', `age -d -i [TEMP_KEY] "${encryptedPath}"`);
+    
+    const buf = execSync(cmd, { encoding: 'buffer', shell: '/run/current-system/sw/bin/sh' }) as unknown as Buffer;
     console.log('Decryption successful, buffer size:', buf.length);
     return Buffer.from(buf);
   } catch (error) {
@@ -82,6 +89,11 @@ export function decryptFileToBuffer(encryptedPath: string): Buffer {
     console.error('File path:', encryptedPath);
     console.error('AGE_PRIVATE_KEY length:', privateKey.length);
     throw error;
+  } finally {
+    // Cleanup
+    try {
+        unlinkSync(tempKeyPath);
+    } catch {}
   }
 }
 
@@ -118,7 +130,7 @@ export async function getPostsList(baseDir: string, options?: { forceRefresh?: b
   }
 
   const files = await fs.readdir(postsDir);
-  const ageFiles = files.filter((f) => f.endsWith('.mdx.age'));
+  const ageFiles = files.filter((f) => f.endsWith('.mdx.age') && !f.startsWith('._'));
 
   const posts: PostSummary[] = [];
   for (const filename of ageFiles) {

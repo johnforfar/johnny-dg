@@ -1,21 +1,6 @@
 { pkgs, lib }:
 let
-  sourceFilter = name: type:
-    let
-      baseName = baseNameOf (toString name);
-    in
-    !(
-      baseName == "node_modules" ||
-      baseName == ".next" ||
-      baseName == ".git" ||
-      baseName == ".DS_Store" ||
-      baseName == ".env"
-    );
-
-  src = lib.cleanSourceWith {
-    src = ../mini-app;
-    filter = sourceFilter;
-  };
+  src = ../mini-app;
 in
 pkgs.buildNpmPackage {
   pname = "johnny-dg";

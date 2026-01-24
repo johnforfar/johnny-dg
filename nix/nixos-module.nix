@@ -86,6 +86,12 @@ in
           Whether to open ports in the firewall for this application.
         '';
       };
+
+      agePrivateKey = lib.mkOption {
+        type = lib.types.str;
+        default = "";
+        description = "The AGE private key for decrypting blog posts.";
+      };
     };
   };
 
@@ -106,6 +112,7 @@ in
         NEXT_PUBLIC_URL = cfg.url;
         NEXT_PUBLIC_ACCOUNT_ASSOCIATION = builtins.toJSON cfg.accountAssociation;
         NEXT_PUBLIC_BASE_BUILDER = builtins.toJSON cfg.baseBuilder;
+        AGE_PRIVATE_KEY = cfg.agePrivateKey;
       };
       path = [ pkgs.age ];
       serviceConfig = {
